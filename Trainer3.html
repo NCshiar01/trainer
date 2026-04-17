@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أنت المدرب | The Trainer - ML Experience</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #6366f1;
+            --secondary: #8b5cf6;
+            --accent: #ec4899;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #e63946;
+            --dark: #0f172a;
+            --darker: #020617;
+            --glass: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 50%, #1e1b4b 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .neural-node {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: var(--primary);
+            border-radius: 50%;
+            opacity: 0.3;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0); }
+            33% { transform: translateY(-30px) translateX(20px); }
+            66% { transform: translateY(20px) translateX(-20px); }
+        }
+
+        header {
+            text-align: center;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .logo {
+            font-size: 3rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, var(--primary), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            color: #94a3b8;
+            letter-spacing: 2px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .glass-card {
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 30px 60px -12px rgba(99, 102, 241, 0.3);
+        }
+
+        .camera-section {
+            grid-column: 1 / -1;
+            text-align: center;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 0 60px rgba(99, 102, 241, 0.3);
+        }
+
+        #webcam {
+            width: 100%;
+            height: 480px;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        .camera-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            border: 3px solid var(--primary);
+            border-radius: 20px;
+        }
+
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: scan 2s linear infinite;
+            opacity: 0;
+        }
+
+        @keyframes scan {
+            0% { top: 0; opacity: 1; }
+            100% { top: 100%; opacity: 1; }
+        }
+
+        .scanning .scan-line {
+            opacity: 1;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.active { background: var(--success); }
+        .status-dot.training { background: var(--warning); }
+        .status-dot.ready { background: var(--primary); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .phases {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+
+        .phase {
+            padding: 1rem 2rem;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            text-align: center;
+            min-width: 150px;
+        }
+
+        .phase.active {
+            border-color: var(--primary);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+            transform: scale(1.05);
+        }
+
+        .phase.completed {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+        }
+
+        .phase-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .phase-title {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .class-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .class-btn {
+            padding: 2rem;
+            border: 3px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .class-btn:hover:not(:disabled) {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+            transform: translateY(-3px);
+        }
+
+        .class-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .class-btn.recording {
+            border-color: var(--accent);
+            background: rgba(236, 72, 153, 0.2);
+            transform: scale(0.98);
+        }
+
+        .class-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .class-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .sample-count {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            transition: width 0.3s;
+        }
+
+        .phase-content {
+            display: none;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .phase-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .training-visual {
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .neural-network {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+        }
+
+        .layer {
+            position: absolute;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .layer-1 { left: 0; top: 50%; transform: translateY(-50%); }
+        .layer-2 { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+        .layer-3 { right: 0; top: 50%; transform: translateY(-50%); }
+
+        .neuron {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.5);
+            animation: neuron-pulse 1.5s infinite;
+        }
+
+        @keyframes neuron-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.2); opacity: 1; }
+        }
+
+        .training-status {
+            margin-top: 2rem;
+            font-size: 1.3rem;
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        /* تحسينات مرحلة الاختبار */
+        .prediction-panel {
+            text-align: center;
+            padding: 2rem 0;
+        }
+
+        .test-header {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(16, 185, 129, 0.2));
+            border: 2px solid var(--success);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .test-title {
+            font-size: 2.2rem;
+            font-weight: 900;
+            color: var(--success);
+            margin-bottom: 1rem;
+        }
+
+        .test-instructions {
+            font-size: 1.2rem;
+            color: #cbd5e1;
+            line-height: 1.8;
+            margin-bottom: 1rem;
+        }
+
+        .test-timer-container {
+            margin: 1.5rem 0;
+            padding: 1rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+        }
+
+        .test-timer-label {
+            font-size: 0.9rem;
+            color: #94a3b8;
+            margin-bottom: 0.5rem;
+        }
+
+        .test-timer {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.5rem;
+            font-weight: 900;
+            color: var(--warning);
+            direction: ltr;
+            display: inline-block;
+        }
+
+        .test-timer.complete {
+            color: var(--success);
+            animation: pulse 1s infinite;
+        }
+
+        .min-time-progress {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+
+        .min-time-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--warning), var(--success));
+            width: 0%;
+            transition: width 1s linear;
+        }
+
+        .analysis-status {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.75rem 2rem;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+
+        .analysis-status.analyzing {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+            border: 2px solid var(--warning);
+        }
+
+        .analysis-status.detected {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border: 2px solid var(--success);
+        }
+
+        .analysis-status.unclear {
+            background: rgba(148, 163, 184, 0.2);
+            color: #94a3b8;
+            border: 2px solid #94a3b8;
+        }
+
+        .prediction-bar {
+            margin: 2rem auto;
+            max-width: 700px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: right;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .prediction-bar.active {
+            border-color: var(--success);
+            background: rgba(16, 185, 129, 0.1);
+            transform: scale(1.02);
+        }
+
+        .prediction-bar.uncertain {
+            border-color: var(--warning);
+            opacity: 0.8;
+        }
+
+        .prediction-bar.inactive {
+            border-color: transparent;
+            opacity: 0.5;
+        }
+
+        .prediction-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            font-weight: 700;
+            font-size: 1.3rem;
+        }
+
+        .prediction-fill {
+            height: 50px;
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            border-radius: 12px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .prediction-fill.inactive {
+            background: #475569;
+            opacity: 0.3;
+        }
+
+        .confidence-text {
+            font-size: 2rem;
+            color: var(--accent);
+            font-weight: 900;
+        }
+
+        .confidence-details {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            font-size: 0.95rem;
+            color: #94a3b8;
+            text-align: center;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .result-box {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(99, 102, 241, 0.2));
+            border: 3px solid var(--success);
+            border-radius: 24px;
+            padding: 3rem;
+            margin: 3rem auto;
+            max-width: 600px;
+            display: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .result-box.show {
+            display: block;
+            animation: popIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.5); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .result-icon {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            animation: bounce 1s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .result-title {
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--success);
+            margin-bottom: 1rem;
+        }
+
+        .result-message {
+            font-size: 1.3rem;
+            color: #cbd5e1;
+            margin-bottom: 1.5rem;
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--success), var(--primary));
+            padding: 0.75rem 2rem;
+            border-radius: 50px;
+            font-size: 1.5rem;
+            font-weight: 900;
+            font-family: 'Orbitron';
+        }
+
+        .action-btn {
+            padding: 1rem 3rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Cairo', sans-serif;
+            margin: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px rgba(99, 102, 241, 0.6);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-danger {
+            background: rgba(230, 57, 70, 0.2);
+            color: var(--danger);
+            border: 2px solid var(--danger);
+        }
+
+        .tip-box {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.1));
+            border-right: 4px solid var(--accent);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1rem auto;
+            max-width: 600px;
+            text-align: right;
+        }
+
+        .feedback {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.98);
+            border: 3px solid var(--success);
+            border-radius: 30px;
+            padding: 4rem;
+            text-align: center;
+            z-index: 1000;
+            display: none;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 0 100px rgba(16, 185, 129, 0.5);
+            min-width: 450px;
+        }
+
+        .feedback.show {
+            display: block;
+            animation: feedbackPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes feedbackPop {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            70% { transform: translate(-50%, -50%) scale(1.1); }
+            100% { transform: translate(-50%, -50%) scale(1); }
+        }
+
+        .feedback-icon {
+            font-size: 6rem;
+            margin-bottom: 1rem;
+            animation: rotate 2s linear infinite;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .feedback-title {
+            font-size: 2.5rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            color: var(--success);
+        }
+
+        .feedback-score {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, var(--primary), var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 1rem 0;
+        }
+
+        .feedback-subtitle {
+            font-size: 1.2rem;
+            color: #94a3b8;
+            margin-bottom: 2rem;
+        }
+
+        .name-input {
+            margin: 1.5rem 0;
+        }
+
+        .name-input input {
+            width: 100%;
+            padding: 1.2rem;
+            border: 2px solid rgba(99, 102, 241, 0.3);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            font-family: 'Cairo', sans-serif;
+            font-size: 1.2rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .name-input input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+            
+            .logo {
+                font-size: 2rem;
+            }
+            
+            .class-container {
+                grid-template-columns: 1fr;
+            }
+
+            .feedback {
+                min-width: 90%;
+                padding: 2rem;
+            }
+        }
+
+        .confetti {
+            position: fixed;
+            width: 12px;
+            height: 12px;
+            top: -12px;
+            animation: confetti-fall 4s linear forwards;
+            z-index: 1000;
+        }
+
+        @keyframes confetti-fall {
+            to {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        .start-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .start-screen.hidden {
+            display: none;
+        }
+
+        .start-title {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .start-subtitle {
+            font-size: 1.5rem;
+            color: #94a3b8;
+            margin-bottom: 3rem;
+            text-align: center;
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            margin-bottom: 3rem;
+        }
+
+        .feature-item {
+            text-align: center;
+            padding: 1.5rem;
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 2000;
+            backdrop-filter: blur(10px);
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(99, 102, 241, 0.3);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .waiting-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 10;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        .waiting-text {
+            font-size: 1.5rem;
+            color: var(--warning);
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .waiting-subtext {
+            font-size: 1rem;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation" id="bgAnimation"></div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text" style="margin-top: 1rem; color: #94a3b8;">جاري تحميل نموذج MobileNet...</div>
+    </div>
+
+    <div class="start-screen" id="startScreen">
+        <h1 class="start-title">🎮 أنت المدرب</h1>
+        <p class="start-subtitle">تعلّم كيف يتعلم الذكاء الاصطناعي من خلال تدريب نموذج حقيقي باستخدام كاميرا الويب</p>
+        
+        <div class="feature-grid">
+            <div class="feature-item">
+                <div class="feature-icon">📸</div>
+                <div class="feature-text">التقط صوراً حقيقية</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">🧠</div>
+                <div class="feature-text">تعلم آلي حقيقي</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">⚡</div>
+                <div class="feature-text">تحليل دقيق</div>
+            </div>
+        </div>
+
+        <button class="action-btn btn-primary" onclick="startExperience()">
+            ابدأ التجربة 🚀
+        </button>
+    </div>
+
+    <header>
+        <h1 class="logo">🎮 أنت المدرب</h1>
+        <p class="subtitle">The Trainer - ML Experience</p>
+    </header>
+
+    <div class="container">
+        <div class="glass-card camera-section">
+            <div class="camera-container" id="cameraContainer">
+                <video id="webcam" autoplay playsinline></video>
+                <div class="camera-overlay"></div>
+                <div class="scan-line"></div>
+                <div class="status-badge">
+                    <span class="status-dot active" id="statusDot"></span>
+                    <span id="statusText">جاري الانتظار...</span>
+                </div>
+            </div>
+
+            <div class="phases">
+                <div class="phase active" id="phase1">
+                    <div class="phase-icon">📸</div>
+                    <div class="phase-title">التجميع</div>
+                </div>
+                <div class="phase" id="phase2">
+                    <div class="phase-icon">🧠</div>
+                    <div class="phase-title">التدريب</div>
+                </div>
+                <div class="phase" id="phase3">
+                    <div class="phase-icon">🎯</div>
+                    <div class="phase-title">الاختبار</div>
+                </div>
+            </div>
+
+            <!-- مرحلة التجميع -->
+            <div class="phase-content active" id="collectionPhase">
+                <div class="tip-box" style="margin-bottom: 2rem;">
+                    <div style="font-weight: 700; color: var(--accent); margin-bottom: 0.5rem;">💡 تعليمات مهمة:</div>
+                    <div style="line-height: 2;">
+                        1. اضغط مطولاً على زر "إشارة السلام" وأظهر ✌️ للكاميرا (8-10 صور)<br>
+                        2. اضغط مطولاً على زر "إشارة الإعجاب" وأظهر 👍 للكاميرا (8-10 صور)<br>
+                        3. تأكد من الإضاءة الجيدة والخلفية الواضحة<br>
+                        4. في الاختبار: يجب الانتظار <strong>15 ثانية</strong> على الأقل قبل ظهور النتيجة
+                    </div>
+                </div>
+
+                <div class="class-container">
+                    <div class="class-btn" id="classA" onmousedown="startRecording('A')" onmouseup="stopRecording()" onmouseleave="stopRecording()" ontouchstart="startRecording('A')" ontouchend="stopRecording()">
+                        <div class="class-icon">✌️</div>
+                        <div class="class-name">إشارة السلام</div>
+                        <div class="sample-count" id="countA">العينات: 0</div>
+                        <div class="progress-bar" id="progressA" style="width: 0%"></div>
+                    </div>
+                    <div class="class-btn" id="classB" onmousedown="startRecording('B')" onmouseup="stopRecording()" onmouseleave="stopRecording()" ontouchstart="startRecording('B')" ontouchend="stopRecording()">
+                        <div class="class-icon">👍</div>
+                        <div class="class-name">إشارة الإعجاب</div>
+                        <div class="sample-count" id="countB">العينات: 0</div>
+                        <div class="progress-bar" id="progressB" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 2rem;">
+                    <button class="action-btn btn-primary" id="trainBtn" onclick="startTraining()" disabled>
+                        ابدأ التدريب 🚀
+                    </button>
+                </div>
+            </div>
+
+            <!-- مرحلة التدريب -->
+            <div class="phase-content" id="trainingPhase">
+                <div class="training-visual">
+                    <div class="neural-network">
+                        <div class="layer layer-1">
+                            <div class="neuron"></div>
+                            <div class="neuron"></div>
+                            <div class="neuron"></div>
+                        </div>
+                        <div class="layer layer-2">
+                            <div class="neuron"></div>
+                            <div class="neuron"></div>
+                            <div class="neuron"></div>
+                            <div class="neuron"></div>
+                        </div>
+                        <div class="layer layer-3">
+                            <div class="neuron"></div>
+                            <div class="neuron"></div>
+                        </div>
+                    </div>
+                    <div class="training-status" id="trainingStatus">جاري تحليل الصور...</div>
+                </div>
+            </div>
+
+            <!-- مرحلة الاختبار - محسنة بشكل كبير -->
+            <div class="phase-content" id="predictionPhase">
+                <div class="prediction-panel">
+                    <div class="test-header">
+                        <div class="test-title">🎯 وقت الاختبار!</div>
+                        <div class="test-instructions">
+                            اختبر ما تعلمه الذكاء الاصطناعي. أظهر إشارة واضحة للكاميرا<br>
+                            <strong style="color: var(--warning);">⚠️ يجب الانتظار 15 ثانية على الأقل قبل ظهور لوحة النتيجة</strong>
+                        </div>
+                        
+                        <div class="test-timer-container">
+                            <div class="test-timer-label">⏱️ الوقت المنقضي (الحد الأدنى 15 ثانية)</div>
+                            <div class="test-timer" id="testTimer">00:00</div>
+                            <div class="min-time-progress">
+                                <div class="min-time-fill" id="timeProgress"></div>
+                            </div>
+                        </div>
+
+                        <div class="analysis-status analyzing" id="analysisStatus">
+                            🔍 جاري التحليل... أظهر إشارة واضحة
+                        </div>
+                    </div>
+
+                    <div class="prediction-bar" id="barContainerA">
+                        <div class="prediction-label">
+                            <span>✌️ إشارة السلام</span>
+                            <span class="confidence-text" id="confA">0%</span>
+                        </div>
+                        <div class="prediction-fill inactive" id="fillA" style="width: 0%"></div>
+                        <div class="confidence-details" id="detailsA">
+                            في انتظار بدء الاختبار...
+                        </div>
+                    </div>
+
+                    <div class="prediction-bar" id="barContainerB">
+                        <div class="prediction-label">
+                            <span>👍 إشارة الإعجاب</span>
+                            <span class="confidence-text" id="confB">0%</span>
+                        </div>
+                        <div class="prediction-fill inactive" id="fillB" style="width: 0%; background: linear-gradient(90deg, #8b5cf6, #ec4899)"></div>
+                        <div class="confidence-details" id="detailsB">
+                            في انتظار بدء الاختبار...
+                        </div>
+                    </div>
+
+                    <div class="result-box" id="resultBox">
+                        <div class="result-icon" id="resultIcon">🎉</div>
+                        <div class="result-title" id="resultTitle">تم التعرف بنجاح!</div>
+                        <div class="result-message" id="resultMessage">النموذج متأكد من الإشارة المعروضة</div>
+                        <div class="confidence-badge" id="confidenceBadge">85%</div>
+                    </div>
+
+                    <div style="text-align: center; margin-top: 3rem;">
+                        <button class="action-btn btn-secondary" onclick="resetApp()">
+                            🔄 تجربة جديدة
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="leaderboard-header">
+                <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span>🏆</span>
+                    أفضل المتصدرين
+                </h3>
+                <div class="leaderboard-tabs">
+                    <button class="tab-btn active" onclick="filterLeaderboard('all')">الكل</button>
+                    <button class="tab-btn" onclick="filterLeaderboard('today')">اليوم</button>
+                </div>
+            </div>
+            <div id="leaderboardList"></div>
+            <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                <button class="action-btn btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="exportScores()">
+                    📥 تصدير
+                </button>
+                <button class="action-btn btn-danger" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="clearScores()">
+                    🗑️ مسح
+                </button>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <h3 style="margin-bottom: 1rem; font-size: 1.3rem;">📚 معايير القبول</h3>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="color: var(--danger); margin-bottom: 0.5rem;">❌ رفض تلقائي (< 60%)</h4>
+                <p style="color: #94a3b8; line-height: 1.6;">الإشارة غير واضحة أو مختلفة تماماً عما تم تعلمه.</p>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="color: var(--warning); margin-bottom: 0.5rem;">⚠️ غير مؤكد (60% - 85%)</h4>
+                <p style="color: #94a3b8; line-height: 1.6;">تشابه جزئي فقط. النموذج غير متأكد بما فيه الكفاية.</p>
+            </div>
+
+            <div>
+                <h4 style="color: var(--success); margin-bottom: 0.5rem;">✅ نجاح (> 85% + 15 ثانية)</h4>
+                <p style="color: #94a3b8; line-height: 1.6;">يجب أن تكون الثقة أعلى من 85% <strong>و</strong> يجب أن يمر 15 ثانية من بدء الاختبار.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- لوحة النتيجة - تظهر فقط بعد الاختبار الحقيقي -->
+    <div class="feedback" id="feedbackModal">
+        <div class="feedback-icon" id="feedbackIcon">🏆</div>
+        <div class="feedback-title" id="feedbackTitle">اختبار ممتاز!</div>
+        <div class="feedback-score" id="feedbackScore">95%</div>
+        <div class="feedback-subtitle">لقد أكملت الاختبار بنجاح!<br>النموذج تعلم بشكل مثالي</div>
+        
+        <div class="name-input">
+            <input type="text" id="playerName" placeholder="أدخل اسمك للمتصدرين" maxlength="20">
+        </div>
+        
+        <button class="action-btn btn-primary" style="margin-top: 1rem; padding: 1rem 3rem;" onclick="saveAndClose()">
+            حفظ النتيجة ✅
+        </button>
+    </div>
+
+    <script>
+        // المتغيرات العالمية
+        let classifier;
+        let mobilenetModel;
+        let video;
+        let currentPhase = 1;
+        let isRecording = false;
+        let recordingInterval;
+        let predictionInterval;
+        let timerInterval;
+        let samplesA = 0;
+        let samplesB = 0;
+        
+        // متغيرات مراقبة الجودة
+        let testStartTime = null;
+        let elapsedTime = 0;
+        const MIN_TEST_TIME = 15; // 15 ثانية حد أدنى
+        let highConfidenceStartTime = null;
+        let currentConfidence = 0;
+        let feedbackShown = false;
+        
+        const LEADERBOARD_KEY = 'trainer_scores_v5';
+        let currentFilter = 'all';
+        let lastAccuracy = 0;
+
+        // تهيئة النظام
+        function createBackgroundAnimation() {
+            const container = document.getElementById('bgAnimation');
+            for (let i = 0; i < 50; i++) {
+                const node = document.createElement('div');
+                node.className = 'neural-node';
+                node.style.left = Math.random() * 100 + '%';
+                node.style.top = Math.random() * 100 + '%';
+                node.style.animationDelay = Math.random() * 20 + 's';
+                container.appendChild(node);
+            }
+        }
+
+        async function init() {
+            createBackgroundAnimation();
+            updateLeaderboard();
+            
+            classifier = knnClassifier.create();
+            
+            document.getElementById('loadingOverlay').classList.add('active');
+            try {
+                mobilenetModel = await mobilenet.load();
+                console.log('MobileNet loaded');
+                document.getElementById('loadingOverlay').classList.remove('active');
+            } catch (error) {
+                console.error('Error:', error);
+                alert('حدث خطأ في تحميل النموذج');
+            }
+        }
+
+        async function startExperience() {
+            document.getElementById('startScreen').classList.add('hidden');
+            await setupWebcam();
+        }
+
+        async function setupWebcam() {
+            video = document.getElementById('webcam');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => resolve(video);
+                });
+            } catch (err) {
+                alert('يرجى السماح بالوصول إلى الكاميرا');
+            }
+        }
+
+        // جمع البيانات
+        async function startRecording(className) {
+            if (!mobilenetModel || !video || isRecording) return;
+            
+            isRecording = true;
+            document.getElementById('class' + className).classList.add('recording');
+            document.getElementById('cameraContainer').classList.add('scanning');
+            
+            recordingInterval = setInterval(async () => {
+                if (!isRecording) return;
+                
+                try {
+                    const image = tf.browser.fromPixels(video);
+                    const activation = mobilenetModel.infer(image, 'conv_preds');
+                    const classId = className === 'A' ? 0 : 1;
+                    
+                    classifier.addExample(activation, classId);
+                    
+                    if (className === 'A') {
+                        samplesA++;
+                        updateProgress('A', samplesA);
+                    } else {
+                        samplesB++;
+                        updateProgress('B', samplesB);
+                    }
+                    
+                    image.dispose();
+                    activation.dispose();
+                    
+                    if (samplesA >= 5 && samplesB >= 5) {
+                        document.getElementById('trainBtn').disabled = false;
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            }, 150);
+        }
+
+        function stopRecording() {
+            isRecording = false;
+            clearInterval(recordingInterval);
+            document.querySelectorAll('.class-btn').forEach(btn => btn.classList.remove('recording'));
+            document.getElementById('cameraContainer').classList.remove('scanning');
+        }
+
+        function updateProgress(className, count) {
+            document.getElementById('count' + className).textContent = `العينات: ${count}`;
+            document.getElementById('progress' + className).style.width = Math.min(count * 10, 100) + '%';
+        }
+
+        // التدريب
+        async function startTraining() {
+            if (samplesA < 5 || samplesB < 5) {
+                alert('يرجى إضافة 5 صور على الأقل لكل فئة');
+                return;
+            }
+            
+            showPhase(2);
+            
+            let progress = 0;
+            const interval = setInterval(() => {
+                progress += 20;
+                document.getElementById('trainingStatus').textContent = `جاري المعالجة ${progress}%...`;
+                
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    document.getElementById('trainingStatus').textContent = 'اكتمل التدريب!';
+                    
+                    setTimeout(() => {
+                        showPhase(3);
+                        startTestTimer(); // بدء المؤقت
+                        startPrediction();
+                        createConfetti();
+                    }, 500);
+                }
+            }, 200);
+        }
+
+        // عرض المرحلة
+        function showPhase(phaseNum) {
+            currentPhase = phaseNum;
+            
+            document.querySelectorAll('.phase').forEach((el, idx) => {
+                el.classList.remove('active', 'completed');
+                if (idx < phaseNum - 1) el.classList.add('completed');
+                if (idx === phaseNum - 1) el.classList.add('active');
+            });
+            
+            document.querySelectorAll('.phase-content').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            if (phaseNum === 1) {
+                document.getElementById('collectionPhase').classList.add('active');
+                document.getElementById('statusText').textContent = 'جمع البيانات';
+                document.getElementById('statusDot').className = 'status-dot active';
+                stopTest();
+            } else if (phaseNum === 2) {
+                document.getElementById('trainingPhase').classList.add('active');
+                document.getElementById('statusText').textContent = 'جاري التدريب...';
+                document.getElementById('statusDot').className = 'status-dot training';
+                stopTest();
+            } else if (phaseNum === 3) {
+                document.getElementById('predictionPhase').classList.add('active');
+                document.getElementById('statusText').textContent = 'جاري الاختبار';
+                document.getElementById('statusDot').className = 'status-dot ready';
+            }
+        }
+
+        // مؤقت الاختبار
+        function startTestTimer() {
+            testStartTime = Date.now();
+            elapsedTime = 0;
+            feedbackShown = false;
+            
+            timerInterval = setInterval(() => {
+                elapsedTime = Math.floor((Date.now() - testStartTime) / 1000);
+                const minutes = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+                const seconds = (elapsedTime % 60).toString().padStart(2, '0');
+                
+                document.getElementById('testTimer').textContent = `${minutes}:${seconds}`;
+                
+                // تحديث شريط التقدم
+                const progress = Math.min((elapsedTime / MIN_TEST_TIME) * 100, 100);
+                document.getElementById('timeProgress').style.width = progress + '%';
+                
+                if (elapsedTime >= MIN_TEST_TIME) {
+                    document.getElementById('testTimer').classList.add('complete');
+                    document.querySelector('.test-timer-label').textContent = '✅ اكتمل الوقت المطلوب! يمكنك الآن حفظ النتيجة إذا كانت دقتك عالية';
+                }
+                
+                // التحقق من إمكانية إظهار النتيجة
+                checkForFeedback();
+            }, 1000);
+        }
+
+        function stopTest() {
+            clearInterval(timerInterval);
+            clearInterval(predictionInterval);
+            testStartTime = null;
+            elapsedTime = 0;
+            highConfidenceStartTime = null;
+            feedbackShown = false;
+        }
+
+        // التنبؤ الحي - تحليل دقيق
+        async function startPrediction() {
+            if (!video || !mobilenetModel || !classifier) return;
+            
+            predictionInterval = setInterval(async () => {
+                try {
+                    if (classifier.getNumClasses() === 0) return;
+                    
+                    const image = tf.browser.fromPixels(video);
+                    const activation = mobilenetModel.infer(image, 'conv_preds');
+                    const result = await classifier.predictClass(activation);
+                    
+                    const confA = Math.round(result.confidences[0] * 100) || 0;
+                    const confB = Math.round(result.confidences[1] * 100) || 0;
+                    const maxConf = Math.max(confA, confB);
+                    const predictedClass = confA > confB ? 'A' : 'B';
+                    
+                    currentConfidence = maxConf;
+                    
+                    // تحديث الواجهة
+                    updatePredictionUI(confA, confB, maxConf, predictedClass);
+                    
+                    // مراقبة الثقة العالية
+                    if (maxConf >= 85) {
+                        if (!highConfidenceStartTime) {
+                            highConfidenceStartTime = Date.now();
+                        }
+                    } else {
+                        highConfidenceStartTime = null;
+                        hideSuccessResult();
+                    }
+                    
+                    // التحقق من إمكانية إظهار النتيجة
+                    checkForFeedback(predictedClass, maxConf, confA, confB);
+                    
+                    image.dispose();
+                    activation.dispose();
+                } catch (error) {
+                    console.error('Prediction error:', error);
+                }
+            }, 200);
+        }
+
+        function updatePredictionUI(confA, confB, maxConf, predictedClass) {
+            const barA = document.getElementById('barContainerA');
+            const barB = document.getElementById('barContainerB');
+            const fillA = document.getElementById('fillA');
+            const fillB = document.getElementById('fillB');
+            const detailsA = document.getElementById('detailsA');
+            const detailsB = document.getElementById('detailsB');
+            const statusText = document.getElementById('analysisStatus');
+            
+            document.getElementById('confA').textContent = confA + '%';
+            document.getElementById('confB').textContent = confB + '%';
+            fillA.style.width = confA + '%';
+            fillB.style.width = confB + '%';
+            
+            // إعادة تعيين الألوان
+            barA.className = 'prediction-bar';
+            barB.className = 'prediction-bar';
+            fillA.className = 'prediction-fill';
+            fillB.className = 'prediction-fill';
+            
+            if (maxConf >= 85) {
+                // ثقة عالية
+                if (predictedClass === 'A') {
+                    barA.classList.add('active');
+                    barB.classList.add('inactive');
+                    fillB.classList.add('inactive');
+                    detailsA.textContent = '✅ تعرف مؤكد! استمر في الإشارة';
+                    detailsB.textContent = 'غير مطابق';
+                } else {
+                    barB.classList.add('active');
+                    barA.classList.add('inactive');
+                    fillA.classList.add('inactive');
+                    detailsB.textContent = '✅ تعرف مؤكد! استمر في الإشارة';
+                    detailsA.textContent = 'غير مطابق';
+                }
+                
+                if (elapsedTime >= MIN_TEST_TIME) {
+                    statusText.textContent = '✅ جاهز! يمكنك حفظ النتيجة الآن';
+                    statusText.className = 'analysis-status detected';
+                } else {
+                    const remaining = MIN_TEST_TIME - elapsedTime;
+                    statusText.textContent = `⏱️ انتظر ${remaining} ثانية أخرى...`;
+                    statusText.className = 'analysis-status analyzing';
+                }
+            } else if (maxConf >= 60) {
+                // ثقة متوسطة
+                barA.classList.add('uncertain');
+                barB.classList.add('uncertain');
+                detailsA.textContent = confA > 50 ? '⚠️ تشابه جزئي - حاول تحسين الوضوح' : 'غير مطابق';
+                detailsB.textContent = confB > 50 ? '⚠️ تشابه جزئي - حاول تحسين الوضوح' : 'غير مطابق';
+                statusText.textContent = '⚠️ غير واضح - حاول تحسين الإشارة';
+                statusText.className = 'analysis-status unclear';
+            } else {
+                // ثقة منخفضة
+                barA.classList.add('inactive');
+                barB.classList.add('inactive');
+                fillA.classList.add('inactive');
+                fillB.classList.add('inactive');
+                detailsA.textContent = '❌ لم يتم التعرف';
+                detailsB.textContent = '❌ لم يتم التعرف';
+                statusText.textContent = '❌ أظهر إشارة واضحة';
+                statusText.className = 'analysis-status unclear';
+            }
+        }
+
+        function checkForFeedback(predictedClass, maxConf, confA, confB) {
+            // الشروط: 1) مرور 15 ثانية 2) ثقة > 85% 3) استمرار الثقة لمدة 3 ثوانٍ على الأقل
+            if (!feedbackShown && elapsedTime >= MIN_TEST_TIME && maxConf >= 85 && highConfidenceStartTime) {
+                const confidentDuration = (Date.now() - highConfidenceStartTime) / 1000;
+                if (confidentDuration >= 3) {
+                    showSuccessResult(predictedClass, maxConf, confA, confB);
+                }
+            }
+        }
+
+        function showSuccessResult(predictedClass, confidence, confA, confB) {
+            feedbackShown = true;
+            const resultBox = document.getElementById('resultBox');
+            const className = predictedClass === 'A' ? 'إشارة السلام ✌️' : 'إشارة الإعجاب 👍';
+            
+            resultBox.classList.add('show');
+            document.getElementById('resultTitle').textContent = `تم التعرف: ${className}`;
+            document.getElementById('resultMessage').textContent = `النموذج متأكد بنسبة ${confidence}% بعد اختبار استمر ${elapsedTime} ثانية`;
+            document.getElementById('confidenceBadge').textContent = confidence + '%';
+            document.getElementById('resultIcon').textContent = confidence > 90 ? '🎯' : '✨';
+            
+            lastAccuracy = confidence;
+            
+            // تأخير 2 ثانية قبل إظهار لوحة الحفظ
+            setTimeout(() => {
+                showFeedback(confidence, confA, confB);
+            }, 2000);
+        }
+
+        function hideSuccessResult() {
+            document.getElementById('resultBox').classList.remove('show');
+        }
+
+        // نظام المتصدرين
+        function loadScores() {
+            try {
+                const data = localStorage.getItem(LEADERBOARD_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveScore(name, accuracy, classA, classB) {
+            const scores = loadScores();
+            scores.push({
+                id: Date.now(),
+                name: name.trim() || 'لاعب مجهول',
+                accuracy: Math.round(accuracy),
+                classA: Math.round(classA),
+                classB: Math.round(classB),
+                date: new Date().toISOString(),
+                testDuration: elapsedTime
+            });
+            
+            scores.sort((a, b) => b.accuracy - a.accuracy);
+            localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(scores.slice(0, 50)));
+            updateLeaderboard();
+        }
+
+        function updateLeaderboard() {
+            const container = document.getElementById('leaderboardList');
+            let scores = loadScores();
+            
+            if (currentFilter === 'today') {
+                const today = new Date().toDateString();
+                scores = scores.filter(s => new Date(s.date).toDateString() === today);
+            }
+            
+            if (scores.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">🏆</div>
+                        <div>لا توجد نتائج بعد</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = scores.slice(0, 10).map((score, index) => {
+                const rankClass = index === 0 ? 'rank-1' : index === 1 ? 'rank-2' : index === 2 ? 'rank-3' : 'rank-other';
+                const scoreClass = score.accuracy >= 90 ? 'score-excellent' : score.accuracy >= 80 ? 'score-good' : 'score-average';
+                
+                return `
+                    <div class="leaderboard-item">
+                        <div class="rank ${rankClass}">${index + 1}</div>
+                        <div class="player-info">
+                            <div class="player-name">${score.name}</div>
+                            <div class="player-meta">
+                                <span>دقة: ${score.accuracy}%</span>
+                                <span>•</span>
+                                <span>وقت: ${score.testDuration || 'unknown'}ث</span>
+                            </div>
+                        </div>
+                        <div class="player-score ${scoreClass}">${score.accuracy}%</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function filterLeaderboard(filter) {
+            currentFilter = filter;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            updateLeaderboard();
+        }
+
+        function exportScores() {
+            const scores = loadScores();
+            if (scores.length === 0) return alert('لا توجد نتائج!');
+            
+            const csv = scores.map((s, i) => `${i+1},${s.name},${s.accuracy}%,${s.testDuration || 'N/A'}s,${new Date(s.date).toLocaleDateString()}`).join('\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'scores.csv';
+            link.click();
+        }
+
+        function clearScores() {
+            if (confirm('هل أنت متأكد؟')) {
+                localStorage.removeItem(LEADERBOARD_KEY);
+                updateLeaderboard();
+            }
+        }
+
+        function showFeedback(accuracy, classA, classB) {
+            const modal = document.getElementById('feedbackModal');
+            document.getElementById('feedbackScore').textContent = Math.round(accuracy) + '%';
+            
+            if (accuracy >= 95) {
+                document.getElementById('feedbackIcon').textContent = '🏆';
+                document.getElementById('feedbackTitle').textContent = 'اختبار استثنائي!';
+            } else if (accuracy >= 90) {
+                document.getElementById('feedbackIcon').textContent = '🌟';
+                document.getElementById('feedbackTitle').textContent = 'اختبار ممتاز!';
+            } else {
+                document.getElementById('feedbackIcon').textContent = '👏';
+                document.getElementById('feedbackTitle').textContent = 'اختبار جيد!';
+            }
+            
+            window.lastClassA = classA;
+            window.lastClassB = classB;
+            modal.classList.add('show');
+            stopTest();
+        }
+
+        function saveAndClose() {
+            const name = document.getElementById('playerName').value;
+            saveScore(name, lastAccuracy, window.lastClassA || 0, window.lastClassB || 0);
+            document.getElementById('feedbackModal').classList.remove('show');
+            startTestTimer();
+            startPrediction();
+        }
+
+        function createConfetti() {
+            const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b'];
+            for (let i = 0; i < 50; i++) {
+                setTimeout(() => {
+                    const confetti = document.createElement('div');
+                    confetti.className = 'confetti';
+                    confetti.style.left = Math.random() * 100 + '%';
+                    confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+                    document.body.appendChild(confetti);
+                    setTimeout(() => confetti.remove(), 4000);
+                }, i * 80);
+            }
+        }
+
+        function resetApp() {
+            samplesA = 0;
+            samplesB = 0;
+            updateProgress('A', 0);
+            updateProgress('B', 0);
+            document.getElementById('trainBtn').disabled = true;
+            hideSuccessResult();
+            document.getElementById('testTimer').textContent = '00:00';
+            document.getElementById('testTimer').classList.remove('complete');
+            document.getElementById('timeProgress').style.width = '0%';
+            document.querySelector('.test-timer-label').textContent = '⏱️ الوقت المنقضي (الحد الأدنى 15 ثانية)';
+            
+            classifier.clearAllClasses();
+            classifier = knnClassifier.create();
+            
+            showPhase(1);
+        }
+
+        init();
+    </script>
+</body>
+</html>
